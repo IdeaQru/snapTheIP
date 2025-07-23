@@ -4,7 +4,14 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "snap": "npx ts-node websocket-tcp-server.ts"
+    "snap": "npx ts-node websocket-tcp-server.ts",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop snaptheip",
+    "pm2:restart": "pm2 restart snaptheip",
+    "pm2:delete": "pm2 delete snaptheip",
+    "pm2:logs": "pm2 logs snaptheip",
+    "pm2:monit": "pm2 monit",
+    "pm2:status": "pm2 status"
   },
   "keywords": [],
   "author": "",
@@ -14,5 +21,10 @@
     "@types/node": "^22.10.8",
     "@types/socket.io-client": "^1.4.36",
     "socket.io-client": "^4.8.1"
+  },
+  "devDependencies": {
+    "pm2": "^5.3.0",
+    "typescript": "^5.0.0",
+    "ts-node": "^10.9.0"
   }
 }
