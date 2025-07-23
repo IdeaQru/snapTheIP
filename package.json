@@ -1,0 +1,18 @@
+{
+  "name": "snaptheip",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "snap": "npx ts-node websocket-tcp-server.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@types/node": "^22.10.8",
+    "@types/socket.io-client": "^1.4.36",
+    "socket.io-client": "^4.8.1"
+  }
+}
