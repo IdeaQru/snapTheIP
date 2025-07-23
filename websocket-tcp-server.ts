@@ -2,7 +2,7 @@ import { Socket } from "socket.io-client";
 import * as net from "net";
 import io from "socket.io-client";
 
-class WebSocketTCPServer {
+class WebSocketTCPBridge {
   private socket: any;
   private tcpServer: net.Server;
   private tcpClients: Map<string, net.Socket> = new Map();
@@ -10,7 +10,7 @@ class WebSocketTCPServer {
   constructor(
     private websocketUrl: string,
     private tcpPort: number,
-    private tcpHost: string = "127.0.0.1"
+    private tcpHost: string = "0.0.0.0"
   ) {
     // Create the WebSocket connection
     this.socket = io(this.websocketUrl, {
@@ -20,48 +20,41 @@ class WebSocketTCPServer {
     // Create TCP server to accept incoming TCP connections
     this.tcpServer = net.createServer((clientSocket) => {
       const clientId = `${clientSocket.remoteAddress}:${clientSocket.remotePort}`;
-      console.log(`Local TCP client connected: ${clientId}`);
+      console.log(`🔗 TCP client connected: ${clientId}`);
       
       // Store client reference
       this.tcpClients.set(clientId, clientSocket);
 
-      // Listen for data coming from the TCP client
+      // INPUT 2: Listen for data from TCP clients
       clientSocket.on("data", (data: Buffer) => {
-        const aisMessage = data.toString().trim();
-        console.log("Received data from TCP client:", aisMessage);
+        const message = data.toString().trim();
+        console.log(`📨 [INPUT 2] Data from TCP client ${clientId}:`, message);
 
-        // Send the received AIS message to WebSocket server
-        if (aisMessage) {
-          this.socket.emit("ais_mesg", { 
-            ais_mesg: aisMessage, 
-            port: this.tcpPort.toString(),
-            clientId: clientId 
-          });
-          console.log("Sent AIS message to WebSocket server:", aisMessage);
-        }
+        // OUTPUT: Broadcast to ALL other TCP clients (except sender)
+        this.broadcastToTCPClients(message, clientId);
       });
 
       // Handle client disconnection
       clientSocket.on("end", () => {
-        console.log(`Local TCP client disconnected: ${clientId}`);
+        console.log(`❌ TCP client disconnected: ${clientId}`);
         this.tcpClients.delete(clientId);
       });
 
       // Handle client socket errors
       clientSocket.on("error", (err) => {
-        console.error(`Error with local TCP client ${clientId}:`, err);
+        console.error(`💥 Error with TCP client ${clientId}:`, err);
         this.tcpClients.delete(clientId);
       });
     });
 
     // Start the TCP server
     this.tcpServer.listen(this.tcpPort, this.tcpHost, () => {
-      console.log(`TCP server listening on ${this.tcpHost}:${this.tcpPort}`);
+      console.log(`🚀 TCP server listening on ${this.tcpHost}:${this.tcpPort}`);
     });
 
     // Handle TCP server errors
     this.tcpServer.on("error", (err) => {
-      console.error("Error with TCP server:", err);
+      console.error("💥 Error with TCP server:", err);
     });
 
     this.initializeWebSocketEvents();
@@ -70,42 +63,97 @@ class WebSocketTCPServer {
   private initializeWebSocketEvents(): void {
     // Event: Connection established
     this.socket.on("connect", () => {
-      console.log("Connected to WebSocket server");
+      console.log("✅ Connected to WebSocket server");
     });
 
     // Event: Disconnection
     this.socket.on("disconnect", () => {
-      console.log("Disconnected from WebSocket server");
+      console.log("❌ Disconnected from WebSocket server");
     });
 
     // Event: Error handling
     this.socket.on("error", (err: any) => {
-      console.error("WebSocket Error:", err);
+      console.error("💥 WebSocket Error:", err);
     });
 
-    // Handle WebSocket messages and forward them to ALL TCP clients
-    this.socket.on("ais_mesg", (data: { ais_mesg: string; port: string; clientId?: string }) => {
-      console.log("AIS message from WebSocket server:", data);
+    // INPUT 1: Handle WebSocket messages
+    this.socket.on("ais_mesg", (data: { ais_mesg: string; port: string }) => {
+      console.log(`📨 [INPUT 1] AIS message from WebSocket server:`, data);
 
       const aisMessage = data.ais_mesg.trim();
-      console.log("Broadcasting AIS message to TCP clients:", aisMessage);
-
-      // Send to all connected TCP clients
-      this.tcpClients.forEach((clientSocket, clientId) => {
-        try {
-          clientSocket.write(`${aisMessage}\n`);
-          console.log(`Sent to TCP client ${clientId}: ${aisMessage}`);
-        } catch (error) {
-          console.error(`Error sending to client ${clientId}:`, error);
-          this.tcpClients.delete(clientId);
-        }
-      });
+      
+      // OUTPUT: Broadcast to ALL TCP clients
+      this.broadcastToTCPClients(aisMessage);
     });
+  }
+
+  // OUTPUT: Method to broadcast message to all TCP clients
+  private broadcastToTCPClients(message: string, excludeClientId?: string): void {
+    if (this.tcpClients.size === 0) {
+      console.log("⚠️  No TCP clients connected to broadcast to");
+      return;
+    }
+
+    console.log(`📤 [OUTPUT] Broadcasting to ${this.tcpClients.size} TCP clients:`, message);
+
+    let successCount = 0;
+    let failCount = 0;
+
+    this.tcpClients.forEach((clientSocket, clientId) => {
+      // Skip sender if excludeClientId is provided
+      if (excludeClientId && clientId === excludeClientId) {
+        return;
+      }
+
+      try {
+        clientSocket.write(`${message}\n`);
+        console.log(`✅ Sent to TCP client ${clientId}`);
+        successCount++;
+      } catch (error) {
+        console.error(`💥 Error sending to client ${clientId}:`, error);
+        this.tcpClients.delete(clientId);
+        failCount++;
+      }
+    });
+
+    console.log(`📊 Broadcast result: ${successCount} success, ${failCount} failed`);
+  }
+
+  // Method to get connected clients info
+  public getConnectedClients(): string[] {
+    return Array.from(this.tcpClients.keys());
+  }
+
+  // Method to manually send message to specific client
+  public sendToClient(clientId: string, message: string): boolean {
+    const clientSocket = this.tcpClients.get(clientId);
+    if (clientSocket) {
+      try {
+        clientSocket.write(`${message}\n`);
+        console.log(`✅ Message sent to specific client ${clientId}:`, message);
+        return true;
+      } catch (error) {
+        console.error(`💥 Error sending to specific client ${clientId}:`, error);
+        this.tcpClients.delete(clientId);
+        return false;
+      }
+    } else {
+      console.error(`❌ Client ${clientId} not found`);
+      return false;
+    }
   }
 }
 
-// Instantiate the combined WebSocket-TCP server
+// Instantiate the bridge
 const websocketUrl = "http://146.190.89.97:3333"; // WebSocket server URL
 const tcpPort = 5000; // TCP port for listening
 const tcpHost = "0.0.0.0"; // Listen on all interfaces
-const server = new WebSocketTCPServer(websocketUrl, tcpPort, tcpHost);
+
+const bridge = new WebSocketTCPBridge(websocketUrl, tcpPort, tcpHost);
+
+// Optional: Log connected clients every 30 seconds
+setInterval(() => {
+  const clients = bridge.getConnectedClients();
+  console.log(`📋 Currently connected TCP clients: ${clients.length}`);
+  clients.forEach(client => console.log(`   - ${client}`));
+}, 30000);
