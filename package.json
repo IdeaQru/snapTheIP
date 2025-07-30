@@ -11,7 +11,8 @@
     "pm2:delete": "pm2 delete snaptheip",
     "pm2:logs": "pm2 logs snaptheip",
     "pm2:monit": "pm2 monit",
-    "pm2:status": "pm2 status"
+    "pm2:status": "pm2 status",
+    "pm2:buoy": "npx ts-node buoylisten.ts"
   },
   "keywords": [],
   "author": "",
